@@ -1,0 +1,72 @@
+name: partycular
+description: "PARTYCULAR – živá mapa eventov v Bratislave."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cached_network_image: ^4.0.5
+  flutter_map: ^8.3.2
+  flutter_riverpod: ^3.4.3
+  geolocator: ^14.1.2
+  http: ^1.6.0
+  intl: ^0.20.3
+  latlong2: ^0.10.1
+  share_plus: ^13.3.1
+  shared_preferences: ^2.5.6
+  url_launcher: ^6.3.3
+  vector_map_tiles: ^9.0.0-beta.13
+  vector_tile_renderer: 6.1.0
+  cupertino_icons: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mocktail: ^1.0.5
+  shared_preferences_platform_interface: ^2.4.2
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/map/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Inter-Black.ttf
+          weight: 900
+
+# Launcher icons: sources are rendered by tool/render_app_icon_test.dart.
+flutter_launcher_icons:
+  image_path: assets/icon/app_icon.png
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  adaptive_icon_background: "#17232E"
+  adaptive_icon_foreground: assets/icon/app_icon_foreground.png
+  web:
+    generate: true
+    image_path: assets/icon/app_icon.png
+    background_color: "#17232E"
+    theme_color: "#17232E"
