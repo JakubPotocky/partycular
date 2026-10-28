@@ -11,26 +11,38 @@ import 'events_controller.dart';
 /// Categories in the order the admin offers them.
 const knownCategories = ['Párty', 'Hudba', 'Kino', 'Kultúra', 'Gastro', 'Šport'];
 
-/// Which day the map shows.
+/// Which days the map shows.
 @immutable
 sealed class DayFilter {
   const DayFilter();
 
-  CalendarDay resolve(CalendarDay today);
+  DayRange resolve(CalendarDay today);
 }
 
 final class TodayFilter extends DayFilter {
   const TodayFilter();
 
   @override
-  CalendarDay resolve(CalendarDay today) => today;
+  DayRange resolve(CalendarDay today) => DayRange.single(today);
 }
 
 final class TomorrowFilter extends DayFilter {
   const TomorrowFilter();
 
   @override
-  CalendarDay resolve(CalendarDay today) => today.addDays(1);
+  DayRange resolve(CalendarDay today) => DayRange.single(today.addDays(1));
+}
+
+/// Friday to Sunday of the current week. Once the weekend has begun it
+/// starts today, so days already over are not shown.
+final class WeekendFilter extends DayFilter {
+  const WeekendFilter();
+
+  @override
+  DayRange resolve(CalendarDay today) {
+    final friday = today.addDays(DateTime.friday - today.weekday);
+    return DayRange(friday > today ? friday : today, friday.addDays(2));
+  }
 }
 
 final class DateFilter extends DayFilter {
@@ -39,7 +51,7 @@ final class DateFilter extends DayFilter {
   final CalendarDay day;
 
   @override
-  CalendarDay resolve(CalendarDay today) => day;
+  DayRange resolve(CalendarDay today) => DayRange.single(day);
 
   @override
   bool operator ==(Object other) => other is DateFilter && other.day == day;
@@ -83,7 +95,8 @@ class DayFilterNotifier extends Notifier<DayFilter> {
   }
 }
 
-final selectedDayProvider = Provider<CalendarDay>(
+/// The days the map shows: one, or several for the weekend.
+final selectedRangeProvider = Provider<DayRange>(
   (ref) => ref.watch(dayFilterProvider).resolve(ref.watch(todayProvider)),
 );
 
@@ -120,10 +133,17 @@ final categoryEventsProvider = Provider<List<Event>>((ref) {
   return category == null ? events : events.where((e) => e.category == category).toList(growable: false);
 });
 
-/// Events shown on the map: chosen day and category, sorted by start.
+/// Events shown on the map: chosen days and category, sorted by start.
 final visibleEventsProvider = Provider<List<Event>>((ref) {
-  final day = ref.watch(selectedDayProvider);
-  return ref.watch(categoryEventsProvider).where((e) => e.occursOn(day)).toList(growable: false);
+  final range = ref.watch(selectedRangeProvider);
+  return ref.watch(categoryEventsProvider).where((e) => e.firstDayWithin(range) != null).toList(growable: false);
+});
+
+/// The day each visible event is listed under (by id): the first shown day
+/// it runs on. Groups the list and tags the pins when several days show.
+final visibleEventDaysProvider = Provider<Map<int, CalendarDay>>((ref) {
+  final range = ref.watch(selectedRangeProvider);
+  return {for (final e in ref.watch(visibleEventsProvider)) e.id: e.firstDayWithin(range)!};
 });
 
 /// Every day that has at least one event, for the calendar dots.
@@ -140,11 +160,11 @@ final eventDaysProvider = Provider<Set<CalendarDay>>((ref) {
   return days;
 });
 
-/// The closest day after the selected one that has events, if any; offered
-/// when the selected day is empty.
+/// The closest day after the selected ones that has events, if any; offered
+/// when nothing is on.
 final nextEventDayProvider = Provider<CalendarDay?>((ref) {
-  final selected = ref.watch(selectedDayProvider);
-  final upcoming = ref.watch(eventDaysProvider).where((day) => day > selected).toList()..sort();
+  final selected = ref.watch(selectedRangeProvider);
+  final upcoming = ref.watch(eventDaysProvider).where((day) => day > selected.last).toList()..sort();
   return upcoming.firstOrNull;
 });
 

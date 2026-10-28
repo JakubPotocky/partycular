@@ -1,5 +1,6 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:partycular/core/time/calendar_day.dart';
 import 'package:partycular/data/event.dart';
 
 import '../support/fixtures.dart';
@@ -79,5 +80,18 @@ void main() {
     final open = eventFixture(startsAt: '2026-10-28T20:00:00Z');
     expect(open.isLiveAt(DateTime.utc(2026, 10, 28, 23, 59)), isTrue);
     expect(open.isLiveAt(DateTime.utc(2026, 10, 29, 0, 1)), isFalse);
+  });
+
+  test('finds the first day of a range an event runs on', () {
+    final range = DayRange(CalendarDay.parse('2026-10-30'), CalendarDay.parse('2026-11-01'));
+    final thursdayAllNighter = eventFixture(startsAt: '2026-10-29T21:00:00Z', endsAt: '2026-10-30T05:00:00Z');
+    final saturday = eventFixture(startsAt: '2026-10-31T19:00:00Z');
+    final thursday = eventFixture(startsAt: '2026-10-29T19:00:00Z');
+    final monday = eventFixture(startsAt: '2026-11-02T19:00:00Z');
+
+    expect(thursdayAllNighter.firstDayWithin(range), CalendarDay.parse('2026-10-30'));
+    expect(saturday.firstDayWithin(range), CalendarDay.parse('2026-10-31'));
+    expect(thursday.firstDayWithin(range), isNull);
+    expect(monday.firstDayWithin(range), isNull);
   });
 }

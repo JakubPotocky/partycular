@@ -12,12 +12,15 @@ abstract final class S {
   static const retry = 'Skúsiť znova';
   static const mapFailed = 'Mapu sa nepodarilo načítať. Skontroluj pripojenie.';
   static const emptyDay = 'Na tento deň zatiaľ nemáme eventy.';
+  static const emptyWeekend = 'Na tento víkend zatiaľ nemáme eventy.';
   static String nextEventsOn(String day) => 'Najbližšie: $day';
   static const close = 'Zavrieť';
 
   // Day picker.
   static const today = 'Dnes';
   static const tomorrow = 'Zajtra';
+  static const weekend = 'Víkend';
+  static const thisWeekend = 'Tento víkend';
   static const calendar = 'Kalendár';
   static const pickDate = 'Vybrať dátum';
   static const daysWithEvents = 'Dni s eventami';

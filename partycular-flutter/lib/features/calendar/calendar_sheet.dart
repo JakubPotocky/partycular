@@ -30,7 +30,7 @@ class CalendarSheet extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               MonthCalendar(
-                selected: ref.watch(selectedDayProvider),
+                selected: ref.watch(selectedRangeProvider),
                 today: ref.watch(todayProvider),
                 eventDays: ref.watch(eventDaysProvider),
                 onSelect: (day) => Navigator.of(context).pop(day),

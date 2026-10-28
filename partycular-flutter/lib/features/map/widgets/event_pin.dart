@@ -21,26 +21,32 @@ abstract final class PinGeometry {
       diameter + 2 * (lift(diameter) > labelReserve ? lift(diameter) : labelReserve) + 2 * selectedLabelGap;
 }
 
-/// Builds the flutter_map marker for [event].
-Marker eventMarker(Event event, {required bool selected, required VoidCallback onTap}) {
+/// Builds the flutter_map marker for [event]. [dayTag] (e.g. "Pi") marks
+/// the day when several days are shown.
+Marker eventMarker(Event event, {required bool selected, required VoidCallback onTap, String? dayTag}) {
   final diameter = event.markerSize.diameter;
   return Marker(
     key: ValueKey('event-${event.id}'),
     point: LatLng(event.latitude, event.longitude),
     width: PinGeometry.width,
     height: PinGeometry.boxHeight(diameter),
-    child: EventPin(event: event, selected: selected, onTap: onTap),
+    // Pins only move while the map does, so their painting (shadows, photo,
+    // label) is recorded once and reused on every frame.
+    child: RepaintBoundary(
+      child: EventPin(event: event, selected: selected, onTap: onTap, dayTag: dayTag),
+    ),
   );
 }
 
 /// A round event marker with photo or initials and a short label below.
 /// Mirrors the web app's `.event-pin`.
 class EventPin extends StatefulWidget {
-  const EventPin({super.key, required this.event, required this.selected, required this.onTap});
+  const EventPin({super.key, required this.event, required this.selected, required this.onTap, this.dayTag});
 
   final Event event;
   final bool selected;
   final VoidCallback onTap;
+  final String? dayTag;
 
   @override
   State<EventPin> createState() => _EventPinState();
@@ -86,7 +92,18 @@ class _EventPinState extends State<EventPin> {
                   AnimatedScale(
                     scale: _pressed && !selected ? 1.12 : 1,
                     duration: const Duration(milliseconds: 180),
-                    child: _PinCircle(event: event, selected: selected),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        _PinCircle(event: event, selected: selected),
+                        if (widget.dayTag case final tag?)
+                          Positioned(
+                            top: -5,
+                            right: -12,
+                            child: _DayTag(text: tag, color: event.color),
+                          ),
+                      ],
+                    ),
                   ),
                   AnimatedContainer(
                     duration: duration,
@@ -174,6 +191,30 @@ class _PinLabel extends StatelessWidget {
             Shadow(blurRadius: 6),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The small day badge ("Pi", "So", "Ne") on pins when a weekend is shown.
+class _DayTag extends StatelessWidget {
+  const _DayTag({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xE6070A07),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, height: 1.2),
       ),
     );
   }

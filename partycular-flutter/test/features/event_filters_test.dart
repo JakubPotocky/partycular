@@ -38,7 +38,7 @@ void main() {
 
   test('shows today by default', () async {
     final container = await containerWith(all);
-    expect(container.read(selectedDayProvider), today);
+    expect(container.read(selectedRangeProvider), DayRange.single(today));
     expect(container.read(visibleEventsProvider), [todayConcert, todayParty]);
   });
 
@@ -90,5 +90,37 @@ void main() {
     expect(container.read(selectedEventProvider), todayParty);
     container.read(dayFilterProvider.notifier).select(const TomorrowFilter());
     expect(container.read(selectedEventProvider), isNull);
+  });
+
+  group('weekend', () {
+    DayRange weekendOf(String day) => const WeekendFilter().resolve(CalendarDay.parse(day));
+
+    test('is the coming Friday to Sunday on weekdays', () {
+      final expected = DayRange(CalendarDay.parse('2026-10-30'), CalendarDay.parse('2026-11-01'));
+      expect(weekendOf('2026-10-26'), expected); // Monday
+      expect(weekendOf('2026-10-29'), expected); // Thursday
+      expect(weekendOf('2026-10-30'), expected); // Friday
+    });
+
+    test('starts today once it has begun', () {
+      expect(weekendOf('2026-10-31'), DayRange(CalendarDay.parse('2026-10-31'), CalendarDay.parse('2026-11-01')));
+      expect(weekendOf('2026-11-01'), DayRange.single(CalendarDay.parse('2026-11-01')));
+    });
+
+    test('shows Friday to Sunday events, each under its first shown day', () async {
+      final fridayNight = eventFixture(id: 5, startsAt: '2026-10-30T21:00:00Z', endsAt: '2026-10-31T03:00:00Z');
+      final sundayBrunch = eventFixture(id: 6, startsAt: '2026-11-01T10:00:00Z');
+      final mondayTalk = eventFixture(id: 7, startsAt: '2026-11-02T17:00:00Z');
+      final container = await containerWith([...all.take(3), fridayNight, saturdayFilm, sundayBrunch, mondayTalk]);
+      container.read(dayFilterProvider.notifier).select(const WeekendFilter());
+
+      expect(container.read(visibleEventsProvider), [fridayNight, saturdayFilm, sundayBrunch]);
+      expect(container.read(visibleEventDaysProvider), {
+        5: CalendarDay.parse('2026-10-30'),
+        4: CalendarDay.parse('2026-10-31'),
+        6: CalendarDay.parse('2026-11-01'),
+      });
+      expect(container.read(nextEventDayProvider), CalendarDay.parse('2026-11-02'));
+    });
   });
 }

@@ -171,12 +171,16 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     // Changing what is shown closes the open event, like on the web.
-    ref.listen(selectedDayProvider, (_, _) => _dismissSelection());
+    ref.listen(selectedRangeProvider, (_, _) => _dismissSelection());
     ref.listen(effectiveCategoryProvider, (_, _) => _dismissSelection());
 
     final palette = AppPalette.of(context);
     final styles = ref.watch(mapStylesProvider);
     final visible = ref.watch(visibleEventsProvider);
+    final range = ref.watch(selectedRangeProvider);
+    final dayTags = range.isSingleDay
+        ? const <int, String>{}
+        : ref.watch(visibleEventDaysProvider).map((id, day) => MapEntry(id, EventFormat.weekdayShort(day)));
     final selected = ref.watch(selectedEventProvider);
     final userLocation = ref.watch(userLocationProvider);
     final padding = MediaQuery.paddingOf(context);
@@ -185,141 +189,155 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
     return AnnotatedRegion(
       value: AppTheme.overlayStyle(palette),
       child: Scaffold(
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: Semantics(
-                label: S.mapLabel,
-                child: FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: AppConfig.cityCenter,
-                    initialZoom: AppConfig.initialZoom,
-                    minZoom: AppConfig.minZoom,
-                    maxZoom: AppConfig.maxZoom,
-                    backgroundColor: palette.mapLand,
-                    cameraConstraint: CameraConstraint.containCenter(bounds: AppConfig.cameraBounds),
-                    interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-                    onTap: (_, _) => _dismissSelection(),
-                    onPointerDown: (_, _) => _camera.stop(),
-                    onMapReady: () => setState(() => _mapReady = true),
-                  ),
-                  children: [
-                    if (styles.value case final mapStyles?)
-                      VectorTileLayer(
-                        key: ValueKey(palette.brightness),
-                        theme: mapStyles.forBrightness(palette.brightness),
-                        tileProviders: mapStyles.tileProviders,
-                        layerMode: VectorTileLayerMode.vector,
+        // The glass controls share one backdrop, so the map behind them is
+        // blurred once per frame instead of once per control.
+        body: BackdropGroup(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Semantics(
+                  label: S.mapLabel,
+                  // The map repaints on every camera frame; this keeps those
+                  // repaints from also repainting the controls above it.
+                  child: RepaintBoundary(
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: AppConfig.cityCenter,
+                        initialZoom: AppConfig.initialZoom,
+                        minZoom: AppConfig.minZoom,
+                        maxZoom: AppConfig.maxZoom,
+                        backgroundColor: palette.mapLand,
+                        cameraConstraint: CameraConstraint.containCenter(bounds: AppConfig.cameraBounds),
+                        interactionOptions: const InteractionOptions(
+                          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                        ),
+                        onTap: (_, _) => _dismissSelection(),
+                        onPointerDown: (_, _) => _camera.stop(),
+                        onMapReady: () => setState(() => _mapReady = true),
                       ),
-                    EventMarkersLayer(
-                      events: visible,
-                      selected: selected,
-                      userLocation: userLocation,
-                      onSelect: _selectEvent,
-                      onCluster: _openCluster,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                bottom: false,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      child: _TopBar(onSettings: () => showSettingsSheet(context)),
-                    ),
-                    const CategoryBar(),
-                    const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _MapStatus(
-                        styleError: styles.hasError && !styles.hasValue,
-                        offlineNoticeDismissed: _offlineNoticeDismissed,
-                        onDismissOffline: () => setState(() => _offlineNoticeDismissed = true),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: bottom + _controlsHeight + 12,
-              top: padding.top + 120,
-              child: Align(
-                alignment: MediaQuery.sizeOf(context).width >= 900 ? Alignment.bottomRight : Alignment.bottomCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 500),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 260),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween(begin: const Offset(0, 0.12), end: Offset.zero).animate(animation),
-                        child: child,
-                      ),
-                    ),
-                    layoutBuilder: (current, previous) =>
-                        Stack(alignment: Alignment.bottomCenter, children: [...previous, ?current]),
-                    child: selected == null
-                        ? const SizedBox.shrink()
-                        : EventDetailCard(
-                            key: ValueKey(selected.id),
-                            event: selected,
-                            now: ref.watch(clockProvider)(),
-                            onClose: _dismissSelection,
+                      children: [
+                        if (styles.value case final mapStyles?)
+                          // Raster mode draws each tile once into an image; vector
+                          // mode re-renders every tile on each frame and stutters.
+                          VectorTileLayer(
+                            key: ValueKey(palette.brightness),
+                            theme: mapStyles.forBrightness(palette.brightness),
+                            tileProviders: mapStyles.tileProviders,
+                            layerMode: VectorTileLayerMode.raster,
+                            maximumZoom: AppConfig.maxZoom,
                           ),
+                        EventMarkersLayer(
+                          events: visible,
+                          selected: selected,
+                          userLocation: userLocation,
+                          dayTags: dayTags,
+                          onSelect: _selectEvent,
+                          onCluster: _openCluster,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: bottom,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _ListButton(count: visible.length, onPressed: _openList),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        child: _TopBar(onSettings: () => showSettingsSheet(context)),
+                      ),
+                      const CategoryBar(),
+                      const SizedBox(height: 10),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _MapStatus(
+                          styleError: styles.hasError && !styles.hasValue,
+                          offlineNoticeDismissed: _offlineNoticeDismissed,
+                          onDismissOffline: () => setState(() => _offlineNoticeDismissed = true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: bottom + _controlsHeight + 12,
+                top: padding.top + 120,
+                child: Align(
+                  alignment: MediaQuery.sizeOf(context).width >= 900 ? Alignment.bottomRight : Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween(begin: const Offset(0, 0.12), end: Offset.zero).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      layoutBuilder: (current, previous) =>
+                          Stack(alignment: Alignment.bottomCenter, children: [...previous, ?current]),
+                      child: selected == null
+                          ? const SizedBox.shrink()
+                          : EventDetailCard(
+                              key: ValueKey(selected.id),
+                              event: selected,
+                              now: ref.watch(clockProvider)(),
+                              onClose: _dismissSelection,
+                            ),
                     ),
                   ),
-                  GlassCircleButton(
-                    icon: Icons.explore_outlined,
-                    tooltip: S.recenter,
-                    size: _controlsHeight,
-                    iconSize: 28,
-                    iconColor: palette.accent,
-                    onPressed: _goHome,
-                  ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: GlassCircleButton(
-                        icon: Icons.my_location_rounded,
-                        tooltip: S.myLocation,
-                        busy: _locating,
-                        onPressed: _locate,
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: bottom,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _ListButton(count: visible.length, onPressed: _openList),
                       ),
                     ),
-                  ),
-                ],
+                    GlassCircleButton(
+                      icon: Icons.explore_outlined,
+                      tooltip: S.recenter,
+                      size: _controlsHeight,
+                      iconSize: 28,
+                      iconColor: palette.accent,
+                      onPressed: _goHome,
+                    ),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: GlassCircleButton(
+                          icon: Icons.my_location_rounded,
+                          tooltip: S.myLocation,
+                          busy: _locating,
+                          onPressed: _locate,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Positioned(right: 6, bottom: math.max(padding.bottom - 14, 2), child: const _Attribution()),
-            Positioned.fill(child: _LoadingCurtain(visible: styles.isLoading && !styles.hasValue)),
-          ],
+              Positioned(right: 6, bottom: math.max(padding.bottom - 14, 2), child: const _Attribution()),
+              Positioned.fill(child: _LoadingCurtain(visible: styles.isLoading && !styles.hasValue)),
+            ],
+          ),
         ),
       ),
     );
@@ -369,6 +387,7 @@ class _MapStatus extends ConsumerWidget {
     final events = ref.watch(eventsProvider);
     final visible = ref.watch(visibleEventsProvider);
     final nextDay = ref.watch(nextEventDayProvider);
+    final singleDay = ref.watch(selectedRangeProvider.select((range) => range.isSingleDay));
     Future<void> retry() => ref.read(eventsProvider.notifier).refresh();
 
     final Widget? banner;
@@ -404,7 +423,7 @@ class _MapStatus extends ConsumerWidget {
     } else if (visible.isEmpty) {
       banner = StatusBanner(
         key: const ValueKey('empty'),
-        message: S.emptyDay,
+        message: singleDay ? S.emptyDay : S.emptyWeekend,
         actionLabel: nextDay == null ? null : S.nextEventsOn(EventFormat.day(nextDay)),
         onAction: nextDay == null ? null : () => ref.read(dayFilterProvider.notifier).selectDay(nextDay),
       );

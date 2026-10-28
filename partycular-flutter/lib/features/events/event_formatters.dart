@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 
+import '../../core/strings.dart';
 import '../../core/time/calendar_day.dart';
 import '../../data/event.dart';
 
@@ -22,6 +23,13 @@ abstract final class EventFormat {
 
   /// `9. 10.` – compact, for the day picker pill.
   static String shortDay(CalendarDay day) => '${day.day}. ${day.month}.';
+
+  /// `9. 10. – 11. 10.`, or a single [shortDay].
+  static String shortRange(DayRange range) =>
+      range.isSingleDay ? shortDay(range.first) : '${shortDay(range.first)} – ${shortDay(range.last)}';
+
+  /// `Pi` – the day tag on weekend pins.
+  static String weekdayShort(CalendarDay day) => S.weekdaysShort[day.weekday - 1];
 
   /// `október 2026` – calendar title.
   static String month(CalendarDay day) => DateFormat('LLLL y', _locale).format(day.noon);

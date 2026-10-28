@@ -136,11 +136,19 @@ class Event {
 
   /// Includes overnight events on each day they run; an end exactly at
   /// midnight is exclusive. Mirrors `eventOnDay` from the web app.
-  bool occursOn(CalendarDay day) {
-    final first = CalendarDay.of(startsAt);
+  bool occursOn(CalendarDay day) => firstDay <= day && day <= lastDay;
+
+  CalendarDay get firstDay => CalendarDay.of(startsAt);
+
+  CalendarDay get lastDay {
     final end = endsAt;
-    final last = end != null ? CalendarDay.of(end.subtract(const Duration(milliseconds: 1))) : first;
-    return first <= day && day <= last;
+    return end != null ? CalendarDay.of(end.subtract(const Duration(milliseconds: 1))) : firstDay;
+  }
+
+  /// The first day of [range] this event runs on, or null if it misses it.
+  CalendarDay? firstDayWithin(DayRange range) {
+    final day = firstDay > range.first ? firstDay : range.first;
+    return day <= lastDay && day <= range.last ? day : null;
   }
 
   bool isLiveAt(DateTime now) => !now.isBefore(startsAt) && now.isBefore(endsAt ?? startsAt.add(assumedDuration));

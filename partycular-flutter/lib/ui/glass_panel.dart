@@ -6,6 +6,9 @@ import '../core/theme/app_palette.dart';
 
 /// The floating, blurred panel used for every control over the map
 /// (the web app's `.glass` class).
+///
+/// The blur joins the nearest [BackdropGroup], so panels over the same
+/// backdrop are blurred in one pass. Panels in one group must not overlap.
 class GlassPanel extends StatelessWidget {
   const GlassPanel({
     super.key,
@@ -27,7 +30,7 @@ class GlassPanel extends StatelessWidget {
     final p = AppPalette.of(context);
     final isCircle = shape == BoxShape.circle;
     final radius = isCircle ? null : borderRadius;
-    final blurred = BackdropFilter(
+    final blurred = BackdropFilter.grouped(
       filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
       child: DecoratedBox(
         decoration: BoxDecoration(

@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../core/strings.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/time/calendar_day.dart';
 import '../../data/event.dart';
 import '../../ui/event_image.dart';
 import '../events/event_filters.dart';
 import '../events/event_formatters.dart';
 import '../events/events_controller.dart';
 
-/// Lists [events] (by default the selected day's) and returns the one the
+/// Lists [events] (by default the selected days') and returns the one the
 /// user taps. [title] replaces the day heading, e.g. with a venue name.
 Future<Event?> showEventListSheet(BuildContext context, {List<Event>? events, String? title}) =>
     showModalBottomSheet<Event>(
@@ -38,8 +39,29 @@ class EventListSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = AppPalette.of(context);
     final List<Event> items = events ?? ref.watch(visibleEventsProvider);
-    final day = ref.watch(selectedDayProvider);
+    final range = ref.watch(selectedRangeProvider);
+    final eventDays = ref.watch(visibleEventDaysProvider);
     final now = ref.watch(clockProvider)();
+    final rangeTitle = range.isSingleDay ? EventFormat.dayHeading(range.first) : S.thisWeekend;
+    final subtitle = [
+      if (title != null) rangeTitle,
+      if (!range.isSingleDay) EventFormat.shortRange(range),
+      S.eventCount(items.length),
+    ].join(' · ');
+
+    // Several days are listed in sections, one per day.
+    final Iterable<({CalendarDay? day, List<Event> events})> groups = range.isSingleDay
+        ? [(day: null, events: items)]
+        : [
+            for (final day in range.days)
+              (
+                day: day,
+                events: [
+                  for (final e in items)
+                    if ((eventDays[e.id] ?? e.firstDay) == day) e,
+                ],
+              ),
+          ].where((group) => group.events.isNotEmpty);
 
     return RefreshIndicator(
       onRefresh: () => ref.read(eventsProvider.notifier).refresh(),
@@ -54,16 +76,11 @@ class EventListSheet extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title ?? EventFormat.dayHeading(day),
+                    title ?? rangeTitle,
                     style: TextStyle(color: p.text, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.6),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    title == null
-                        ? S.eventCount(items.length)
-                        : '${EventFormat.dayHeading(day)} · ${S.eventCount(items.length)}',
-                    style: TextStyle(color: p.muted, fontSize: 13.5),
-                  ),
+                  Text(subtitle, style: TextStyle(color: p.muted, fontSize: 13.5)),
                 ],
               ),
             ),
@@ -80,7 +97,7 @@ class EventListSheet extends ConsumerWidget {
                       Icon(Icons.event_busy_rounded, size: 40, color: p.muted),
                       const SizedBox(height: 12),
                       Text(
-                        S.emptyDay,
+                        range.isSingleDay ? S.emptyDay : S.emptyWeekend,
                         textAlign: TextAlign.center,
                         style: TextStyle(color: p.muted, fontSize: 14),
                       ),
@@ -89,20 +106,43 @@ class EventListSheet extends ConsumerWidget {
                 ),
               ),
             )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.only(bottom: 24),
-              sliver: SliverList.separated(
-                itemCount: items.length,
+          else ...[
+            for (final group in groups) ...[
+              if (group.day case final day?) SliverToBoxAdapter(child: _DayHeader(day: day)),
+              SliverList.separated(
+                itemCount: group.events.length,
                 separatorBuilder: (_, _) => Divider(indent: 84, endIndent: 20, color: p.border.withValues(alpha: 0.6)),
                 itemBuilder: (context, index) => EventListTile(
-                  event: items[index],
-                  isLive: items[index].isLiveAt(now),
-                  onTap: () => Navigator.of(context).pop(items[index]),
+                  event: group.events[index],
+                  isLive: group.events[index].isLiveAt(now),
+                  onTap: () => Navigator.of(context).pop(group.events[index]),
                 ),
               ),
-            ),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _DayHeader extends StatelessWidget {
+  const _DayHeader({required this.day});
+
+  final CalendarDay day;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Semantics(
+      header: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+        child: Text(
+          EventFormat.dayHeading(day),
+          style: TextStyle(color: p.accent, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: -0.1),
+        ),
       ),
     );
   }

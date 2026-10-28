@@ -13,7 +13,7 @@ import 'event_pin.dart';
 ///
 /// Lives inside [FlutterMap] and re-clusters as the zoom changes. The
 /// selected event is never clustered and is drawn on top.
-class EventMarkersLayer extends StatelessWidget {
+class EventMarkersLayer extends StatefulWidget {
   const EventMarkersLayer({
     super.key,
     required this.events,
@@ -21,6 +21,7 @@ class EventMarkersLayer extends StatelessWidget {
     required this.userLocation,
     required this.onSelect,
     required this.onCluster,
+    this.dayTags = const {},
   });
 
   final List<Event> events;
@@ -29,38 +30,73 @@ class EventMarkersLayer extends StatelessWidget {
   final ValueChanged<Event> onSelect;
   final ValueChanged<EventCluster> onCluster;
 
+  /// Short day names by event id, shown on pins when several days show.
+  final Map<int, String> dayTags;
+
+  @override
+  State<EventMarkersLayer> createState() => _EventMarkersLayerState();
+}
+
+class _EventMarkersLayerState extends State<EventMarkersLayer> {
+  /// Clustering snaps to this zoom step. Panning then never re-clusters and
+  /// pinching does so only a few times per level, instead of every frame.
+  static const _zoomStep = 0.25;
+
+  /// Kept between frames: handing [MarkerLayer] the same instance lets it
+  /// keep its projected points and skips rebuilding every pin.
+  MarkerLayer? _layer;
+  double? _clusterZoom;
+  Color? _accent;
+
+  @override
+  void didUpdateWidget(EventMarkersLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _layer = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final camera = MapCamera.of(context);
-    final palette = AppPalette.of(context);
-    final zoom = camera.zoom;
+    final accent = AppPalette.of(context).accent;
+    // Rounding down clusters a little early rather than letting pins overlap.
+    final zoom = (camera.zoom / _zoomStep).floorToDouble() * _zoomStep;
+    if (_layer == null || zoom != _clusterZoom || accent != _accent) {
+      _clusterZoom = zoom;
+      _accent = accent;
+      _layer = MarkerLayer(markers: _markers(camera, zoom, accent));
+    }
+    return _layer!;
+  }
+
+  List<Marker> _markers(MapCamera camera, double zoom, Color accent) {
+    final selected = widget.selected;
     final clusters = clusterEvents(
       [
-        for (final e in events)
+        for (final e in widget.events)
           if (e.id != selected?.id) e,
       ],
       project: (point) => camera.projectAtZoom(point, zoom),
       unproject: (pixel) => camera.unprojectAtZoom(pixel, zoom),
     );
-    return MarkerLayer(
-      markers: [
-        if (userLocation case final location?) userLocationMarker(location, palette.accent),
-        for (final cluster in clusters)
-          if (cluster.isSingle)
-            eventMarker(cluster.events.single, selected: false, onTap: () => onSelect(cluster.events.single))
-          else
-            _clusterMarker(cluster),
-        if (selected case final event?) eventMarker(event, selected: true, onTap: () => onSelect(event)),
-      ],
-    );
+    return [
+      if (widget.userLocation case final location?) userLocationMarker(location, accent),
+      for (final cluster in clusters)
+        if (cluster.isSingle) _eventMarker(cluster.events.single, selected: false) else _clusterMarker(cluster),
+      if (selected != null) _eventMarker(selected, selected: true),
+    ];
   }
+
+  Marker _eventMarker(Event event, {required bool selected}) =>
+      eventMarker(event, selected: selected, onTap: () => widget.onSelect(event), dayTag: widget.dayTags[event.id]);
 
   Marker _clusterMarker(EventCluster cluster) => Marker(
     key: ValueKey('cluster-${cluster.events.map((e) => e.id).join('-')}'),
     point: cluster.center,
     width: PinGeometry.width,
     height: _ClusterPin.boxHeight,
-    child: _ClusterPin(cluster: cluster, onTap: () => onCluster(cluster)),
+    child: RepaintBoundary(
+      child: _ClusterPin(cluster: cluster, onTap: () => widget.onCluster(cluster)),
+    ),
   );
 }
 

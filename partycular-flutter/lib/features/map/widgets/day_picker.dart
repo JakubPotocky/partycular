@@ -8,7 +8,7 @@ import '../../calendar/calendar_sheet.dart';
 import '../../events/event_filters.dart';
 import '../../events/event_formatters.dart';
 
-/// The "Dnes / Zajtra / Kalendár" segmented pill.
+/// The "Dnes / Zajtra / Víkend / Kalendár" segmented pill.
 class DayPicker extends ConsumerWidget {
   const DayPicker({super.key});
 
@@ -28,7 +28,6 @@ class DayPicker extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            flex: 2,
             child: _Segment(
               label: S.today,
               selected: filter is TodayFilter,
@@ -36,7 +35,6 @@ class DayPicker extends ConsumerWidget {
             ),
           ),
           Expanded(
-            flex: 2,
             child: _Segment(
               label: S.tomorrow,
               selected: filter is TomorrowFilter,
@@ -44,14 +42,28 @@ class DayPicker extends ConsumerWidget {
             ),
           ),
           Expanded(
-            flex: 3,
             child: _Segment(
-              label: filter is DateFilter ? EventFormat.shortDay(filter.day) : S.calendar,
-              semanticsLabel: filter is DateFilter ? '${S.calendar}: ${EventFormat.day(filter.day)}' : S.pickDate,
-              icon: Icons.calendar_month_rounded,
-              selected: filter is DateFilter,
-              onTap: openCalendar,
+              label: S.weekend,
+              semanticsLabel: S.thisWeekend,
+              selected: filter is WeekendFilter,
+              onTap: () => notifier.select(const WeekendFilter()),
             ),
+          ),
+          Expanded(
+            // A picked date replaces the icon; both do not fit on a phone.
+            child: filter is DateFilter
+                ? _Segment(
+                    label: EventFormat.shortDay(filter.day),
+                    semanticsLabel: '${S.calendar}: ${EventFormat.day(filter.day)}',
+                    selected: true,
+                    onTap: openCalendar,
+                  )
+                : _Segment(
+                    icon: Icons.calendar_month_rounded,
+                    semanticsLabel: S.pickDate,
+                    selected: false,
+                    onTap: openCalendar,
+                  ),
           ),
         ],
       ),
@@ -60,9 +72,10 @@ class DayPicker extends ConsumerWidget {
 }
 
 class _Segment extends StatelessWidget {
-  const _Segment({required this.label, required this.selected, required this.onTap, this.icon, this.semanticsLabel});
+  const _Segment({required this.selected, required this.onTap, this.label, this.icon, this.semanticsLabel})
+    : assert(label != null || icon != null);
 
-  final String label;
+  final String? label;
   final String? semanticsLabel;
   final IconData? icon;
   final bool selected;
@@ -84,7 +97,7 @@ class _Segment extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
           height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
             color: selected ? p.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(24),
@@ -92,16 +105,17 @@ class _Segment extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[Icon(icon, size: 16, color: foreground), const SizedBox(width: 5)],
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                  softWrap: false,
-                  style: TextStyle(color: foreground, fontSize: 13.5, fontWeight: FontWeight.w700),
+              if (icon != null) Icon(icon, size: 19, color: foreground),
+              if (label case final text?)
+                Flexible(
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                    style: TextStyle(color: foreground, fontSize: 13.5, fontWeight: FontWeight.w700),
+                  ),
                 ),
-              ),
             ],
           ),
         ),

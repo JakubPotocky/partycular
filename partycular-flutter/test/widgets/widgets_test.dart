@@ -31,7 +31,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           MonthCalendar(
-            selected: const CalendarDay(2026, 10, 28),
+            selected: const DayRange.single(CalendarDay(2026, 10, 28)),
             today: const CalendarDay(2026, 10, 28),
             eventDays: {const CalendarDay(2026, 10, 9), const CalendarDay(2026, 10, 31)},
             onSelect: (day) => picked = day,
@@ -52,7 +52,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           MonthCalendar(
-            selected: const CalendarDay(2026, 12, 1),
+            selected: const DayRange.single(CalendarDay(2026, 12, 1)),
             today: const CalendarDay(2026, 12, 1),
             eventDays: const {},
             onSelect: (_) {},
@@ -121,7 +121,12 @@ void main() {
     await tester.tap(find.text(S.tomorrow));
     await tester.pump();
     expect(container.read(dayFilterProvider), isA<TomorrowFilter>());
-    expect(container.read(selectedDayProvider), const CalendarDay(2026, 10, 29));
+    expect(container.read(selectedRangeProvider), const DayRange.single(CalendarDay(2026, 10, 29)));
+
+    await tester.tap(find.text(S.weekend));
+    await tester.pump();
+    expect(container.read(dayFilterProvider), isA<WeekendFilter>());
+    expect(container.read(selectedRangeProvider), const DayRange(CalendarDay(2026, 10, 30), CalendarDay(2026, 11, 1)));
 
     // Dispose the scope so the "today" ticker is cancelled before the test ends.
     await tester.pumpWidget(const SizedBox.shrink());

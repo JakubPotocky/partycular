@@ -15,7 +15,8 @@ class MonthCalendar extends StatefulWidget {
     required this.onSelect,
   });
 
-  final CalendarDay selected;
+  /// Highlighted days: the picked day, or all of a weekend.
+  final DayRange selected;
   final CalendarDay today;
   final Set<CalendarDay> eventDays;
   final ValueChanged<CalendarDay> onSelect;
@@ -25,7 +26,7 @@ class MonthCalendar extends StatefulWidget {
 }
 
 class _MonthCalendarState extends State<MonthCalendar> {
-  late CalendarDay _month = widget.selected.firstOfMonth;
+  late CalendarDay _month = widget.selected.first.firstOfMonth;
 
   void _showMonth(int delta) => setState(() => _month = _month.addMonths(delta));
 
@@ -98,7 +99,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
     final day = CalendarDay(_month.year, _month.month, dayNumber);
     return _DayCell(
       day: day,
-      selected: day == widget.selected,
+      selected: widget.selected.contains(day),
       isToday: day == widget.today,
       hasEvents: widget.eventDays.contains(day),
       onTap: () => widget.onSelect(day),

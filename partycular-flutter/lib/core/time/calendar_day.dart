@@ -100,3 +100,35 @@ class CalendarDay implements Comparable<CalendarDay> {
   @override
   String toString() => key;
 }
+
+/// An inclusive run of calendar days, e.g. a weekend.
+@immutable
+class DayRange {
+  /// [last] must not be before [first].
+  const DayRange(this.first, this.last);
+
+  const DayRange.single(CalendarDay day) : first = day, last = day;
+
+  final CalendarDay first;
+  final CalendarDay last;
+
+  bool get isSingleDay => first == last;
+
+  bool contains(CalendarDay day) => first <= day && day <= last;
+
+  /// Every day from [first] to [last].
+  Iterable<CalendarDay> get days sync* {
+    for (var day = first; day <= last; day = day.addDays(1)) {
+      yield day;
+    }
+  }
+
+  @override
+  bool operator ==(Object other) => other is DayRange && other.first == first && other.last == last;
+
+  @override
+  int get hashCode => Object.hash(first, last);
+
+  @override
+  String toString() => isSingleDay ? first.key : '${first.key}..${last.key}';
+}
